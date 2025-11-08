@@ -1,0 +1,44 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.6
+    hooks:
+      - id: ruff
+        name: ruff-check
+        args: [--fix]
+        types_or: [python, pyi, jupyter]
+      
+      - id: ruff-format
+        name: ruff-format
+        types_or: [python, pyi, jupyter]
+
+  - repo: local
+    hooks:
+      - id: prevent-mixed-internal-external
+        name: Prevent internal/external files mixed commit
+        entry: bash -c
+        args:
+          - |
+            INTERNAL_PATTERN="^(xrl|intetest|docs/xrl)/"
+            
+            staged_files=$(git -c core.quotePath=false diff --cached --name-only)
+            internal_files=$(echo "$staged_files" | grep -E "$INTERNAL_PATTERN" || true)
+            external_files=$(echo "$staged_files" | grep -vE "$INTERNAL_PATTERN" || true)
+            
+            if [ -n "$internal_files" ] && [ -n "$external_files" ]; then
+              echo ""
+              echo "❌ ERROR: Cannot commit internal and external files simultaneously!"
+              echo ""
+              echo "Internal files (xrl/, intetest/):"
+              echo "$internal_files" | sed "s/^/  - /"
+              echo ""
+              echo "External files (other folders):"
+              echo "$external_files" | sed "s/^/  - /"
+              echo ""
+              echo "💡 Please commit them separately"
+              echo ""
+              exit 1
+            fi
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
