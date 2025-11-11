@@ -1,4 +1,8 @@
-# ROCK 快速开始指南
+---
+sidebar_position: 2
+---
+
+# 快速开始
 
 本指南将通过完整的示例演示如何使用 ROCK 创建和管理强化学习环境。ROCK (Reinforcement Open Construction Kit) 是一个全面的沙箱环境管理框架，主要用于强化学习和AI开发环境。
 

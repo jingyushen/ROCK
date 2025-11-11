@@ -1,4 +1,8 @@
-# ROCK SDK 文档
+---
+sidebar_position: 6
+---
+
+# Python SDK 参考
 
 本指南详细介绍如何使用 ROCK SDK 进行开发，包括沙箱环境管理和 GEM 环境交互。
 
