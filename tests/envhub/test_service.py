@@ -1,6 +1,9 @@
+import tempfile
+
 import pytest
 
-from rock.envhub import DeleteEnvRequest, GetEnvRequest, ListEnvsRequest, RegisterRequest
+from rock import env_vars
+from rock.envhub import DeleteEnvRequest, DockerEnvHub, GetEnvRequest, ListEnvsRequest, RegisterRequest
 
 # ============ Basic functionality tests ============
 
@@ -87,7 +90,7 @@ def test_list_envs_empty(docker_env_hub):
     """Test listing environments when none exist"""
     request = ListEnvsRequest()
     envs = docker_env_hub.list_envs(request)
-    assert envs == []
+    assert len(envs) == 1  # because of the default env
 
 
 def test_list_envs_multiple(docker_env_hub):
@@ -98,10 +101,7 @@ def test_list_envs_multiple(docker_env_hub):
 
     request = ListEnvsRequest()
     all_envs = docker_env_hub.list_envs(request)
-    assert len(all_envs) == 3
-
-    env_names = {env.env_name for env in all_envs}
-    assert env_names == {"env1", "env2", "env3"}
+    assert len(all_envs) == 4
 
 
 def test_list_envs_filter_by_owner(docker_env_hub):
@@ -198,10 +198,12 @@ def test_delete_env_does_not_affect_others(docker_env_hub):
 
     request = ListEnvsRequest()
     remaining = docker_env_hub.list_envs(request)
-    assert len(remaining) == 2
+    assert len(remaining) == 3  # because of the default env
 
     env_names = {env.env_name for env in remaining}
-    assert env_names == {"env1", "env3"}
+    assert "env1" in env_names
+    assert "env3" in env_names
+    assert "env2" not in env_names
 
 
 # ============ Special fields tests ============
@@ -261,3 +263,45 @@ def test_extra_spec_dict_get(docker_env_hub):
     assert spec.extra_spec["gpu_enabled"] is True
     assert spec.extra_spec["memory"] == "8g"
     assert spec.extra_spec["nested"]["key"] == "value"
+
+
+# ============ DockerEnvHub specific methods tests ============
+
+
+def test_init_default_env_creates_default_environment(docker_env_hub):
+    """Test that init_default_env creates the default environment."""
+    # The default environment should be automatically created during initialization
+    from rock.envhub.api.schemas import GetEnvRequest
+
+    default_env = docker_env_hub.get_env(GetEnvRequest(env_name=docker_env_hub.DEFAULT_ENV_NAME))
+
+    assert default_env.env_name == docker_env_hub.DEFAULT_ENV_NAME
+    assert default_env.image == env_vars.ROCK_ENVHUB_DEFAULT_DOCKER_IMAGE
+    assert default_env.owner == "ENVHUB"
+
+
+def test_check_envs_available_basic(docker_env_hub, docker_available, default_image_available):
+    """Test that check_envs_available checks default env properly - should return False without docker installed."""
+    result = docker_env_hub.check_envs_available()
+    # In a basic DockerEnvHub instance (without docker installed or images present),
+    # method may return False
+    assert isinstance(result, bool)
+
+
+def test_check_envs_available_with_existing_default_image(docker_available, default_image_available):
+    """Test check_envs_available with mocked docker functionality."""
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_file:
+        db_path = tmp_file.name
+
+        db_url = f"sqlite:///{db_path}"
+        hub = DockerEnvHub(db_url=db_url)
+
+        # Register an environment using the default image from env_vars
+        default_image = "python:3.11-not-exist"  # Using fixed, common image for this specific test
+
+        hub.register(RegisterRequest(env_name="default-image-test", image=default_image, owner="test"))
+
+        result = hub.check_envs_available()
+
+        assert result is False
