@@ -1,7 +1,7 @@
 ---
 name: Bug Report
 about: Report a bug in ROCK framework
-title: '[BUG] '
+title: '[Bug] '
 labels: 'bug'
 assignees: ''
 

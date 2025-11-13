@@ -1,7 +1,7 @@
 ---
 name: Feature Request
 about: Suggest a new feature or enhancement for ROCK framework
-title: '[FEATURE] '
+title: '[Feature] '
 labels: 'enhancement'
 assignees: ''
 
