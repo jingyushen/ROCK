@@ -37,6 +37,7 @@ from rock.actions import (
     WriteFileResponse,
 )
 from rock.sdk.common.constants import PID_PREFIX, PID_SUFFIX, RunModeType
+from rock.sdk.sandbox.agent.base import Agent
 from rock.sdk.sandbox.config import SandboxConfig, SandboxGroupConfig
 from rock.utils import HttpUtils, extract_nohup_pid, retry_async
 
@@ -52,6 +53,7 @@ class Sandbox(AbstractSandbox):
     _host_ip: str | None = None
     _oss_bucket: oss2.Bucket | None = None
     _cluster: str | None = None
+    agent: Agent | None = None
 
     def __init__(self, config: SandboxConfig):
         self._pod_name = None
