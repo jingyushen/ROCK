@@ -14,6 +14,7 @@ from httpx import ReadTimeout
 from typing_extensions import deprecated
 
 from rock import env_vars
+import rock
 from rock.actions import (
     AbstractSandbox,
     Action,
@@ -37,8 +38,9 @@ from rock.actions import (
     WriteFileRequest,
     WriteFileResponse,
 )
+from rock.actions import SandboxResponse
 from rock.sdk.common.constants import PID_PREFIX, PID_SUFFIX, RunModeType
-from rock.sdk.common.exceptions import InvalidParameterRockException
+from rock.sdk.common.exceptions import InternalServerRockError, InvalidParameterRockException, raise_for_code
 from rock.sdk.sandbox.agent.base import Agent
 from rock.sdk.sandbox.config import SandboxConfig, SandboxGroupConfig
 from rock.sdk.sandbox.model_service.base import ModelService
@@ -143,6 +145,10 @@ class Sandbox(AbstractSandbox):
 
         logging.debug(f"Start sandbox response: {response}")
         if "Success" != response.get("status"):
+            result = response.get("result", None)
+            if result is not None:
+                rock_response = SandboxResponse(**result)
+                raise_for_code(rock_response.code, f"Failed to start container: {response}")
             raise Exception(f"Failed to start sandbox: {response}")
         self._sandbox_id = response.get("result").get("sandbox_id")
         self._host_name = response.get("result").get("host_name")
@@ -158,7 +164,9 @@ class Sandbox(AbstractSandbox):
             except Exception as e:
                 logging.warning(f"Failed to get status, {str(e)}")
             await asyncio.sleep(3)
-        raise Exception(f"Failed to start sandbox within {self.config.startup_timeout}s, sandbox: {str(self)}")
+        raise InternalServerRockError(
+            f"Failed to start sandbox within {self.config.startup_timeout}s, sandbox: {str(self)}"
+        )
 
     async def is_alive(self) -> IsAliveResponse:
         try:
