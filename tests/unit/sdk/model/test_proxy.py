@@ -33,7 +33,7 @@ async def test_chat_completions_routing_success():
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             payload = {
-                "model": "gpt",
+                "model": "gpt-3.5-turbo",
                 "messages": [{"role": "user", "content": "hello"}]
             }
             response = await ac.post("/v1/chat/completions", json=payload)
@@ -45,20 +45,60 @@ async def test_chat_completions_routing_success():
 
 
 @pytest.mark.asyncio
-async def test_chat_completions_routing_not_configured_fail():
+async def test_chat_completions_fallback_to_default_when_not_found():
     """
-    Test that the proxy fails when the model is not configured.
+    Test that an unrecognized model name correctly falls back to the 'default' URL.
     """
-    transport = ASGITransport(app=test_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        payload = {
-            "model": "claude-3",
-            "messages": [{"role": "user", "content": "hello"}]
-        }
-        response = await ac.post("/v1/chat/completions", json=payload)
+    patch_path = 'rock.sdk.model.server.api.proxy.perform_llm_request'
+
+    with patch(patch_path, new_callable=AsyncMock) as mock_request:
+        mock_resp = MagicMock(spec=Response)
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"id": "chat-fallback", "choices": []}
+        mock_request.return_value = mock_resp
+
+        config = test_app.state.model_service_config
+        default_base_url = config.proxy_rules["default"].rstrip("/")
+        expected_target_url = f"{default_base_url}/v1/chat/completions"
+
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            payload = {
+                "model": "some-random-unsupported-model", # This model is NOT in proxy_rules
+                "messages": [{"role": "user", "content": "hello"}]
+            }
+            response = await ac.post("/v1/chat/completions", json=payload)
+
+        assert response.status_code == 200
+
+        # Verify that perform_llm_request was called with the DEFAULT URL
+        call_args = mock_request.call_args[0]
+        actual_url = call_args[0]
+
+        assert actual_url == expected_target_url
+        assert mock_request.called
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_routing_absolute_fail():
+    """
+    Test that both the specific model and the 'default' rule are missing.
+    """
+    empty_config = ModelServiceConfig()
+    empty_config.proxy_rules = {}
+
+    with patch.object(test_app.state, 'model_service_config', empty_config):
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            payload = {
+                "model": "any-model",
+                "messages": [{"role": "user", "content": "hello"}]
+            }
+            response = await ac.post("/v1/chat/completions", json=payload)
 
     assert response.status_code == 400
-    assert "not configured" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "not configured" in detail
 
 
 @pytest.mark.asyncio
@@ -161,7 +201,7 @@ async def test_lifespan_initialization_with_config(tmp_path):
         # Verify that the config reflects file content instead of defaults
         assert config.proxy_rules["my-model"] == "http://custom-url"
         assert config.request_timeout == 50
-        assert "gpt" not in config.proxy_rules
+        assert "gpt-3.5-turbo" not in config.proxy_rules
 
 
 @pytest.mark.asyncio
@@ -175,8 +215,8 @@ async def test_lifespan_initialization_no_config():
 
     async with lifespan(app):
         config = app.state.model_service_config
-        # Verify that default rules (e.g., 'gpt') are loaded
-        assert "gpt" in config.proxy_rules
+        # Verify that default rules (e.g., 'gpt-3.5-turbo') are loaded
+        assert "gpt-3.5-turbo" in config.proxy_rules
         assert config.request_timeout == 120
 
 

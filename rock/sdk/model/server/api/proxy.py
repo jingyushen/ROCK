@@ -40,18 +40,19 @@ async def perform_llm_request(url: str, body: dict, headers: dict, config: Model
     return response
 
 
-def get_target_url(model_name: str, config: ModelServiceConfig) -> str:
+def get_base_url(model_name: str, config: ModelServiceConfig) -> str:
     """
     Selects the target backend URL based on model name matching.
     """
-    rules = config.proxy_rules
     if not model_name:
         raise HTTPException(status_code=400, detail="Model name is required for routing.")
 
-    if model_name in rules:
-        return rules[model_name]
+    rules = config.proxy_rules
+    base_url = rules.get(model_name) or rules.get("default")
+    if not base_url:
+        raise HTTPException(status_code=400, detail=f"Model '{model_name}' is not configured and no 'default' rule found.")
 
-    raise HTTPException(status_code=400, detail=f"Model '{model_name}' not configured in proxy rules.")
+    return base_url.rstrip("/")
 
 
 @proxy_router.post("/v1/chat/completions")
@@ -64,7 +65,8 @@ async def chat_completions(body: dict[str, Any], request: Request):
 
     # Step 1: Model Routing
     model_name = body.get("model", "")
-    target_url = get_target_url(model_name, config)
+    base_url = get_base_url(model_name, config)
+    target_url = f"{base_url}/v1/chat/completions"
     logger.info(f"Routing model '{model_name}' to URL: {target_url}")
 
     # Step 2: Header Cleaning
@@ -81,12 +83,12 @@ async def chat_completions(body: dict[str, Any], request: Request):
 
     try:
         # Step 4: Execute Request with Retry Logic
-        response = await perform_llm_request(target_url, body, forwarded_headers)
+        response = await perform_llm_request(target_url, body, forwarded_headers, config)
         return JSONResponse(status_code=response.status_code, content=response.json())
 
     except httpx.HTTPStatusError as e:
         # Forward the raw backend error message to the client.
-        # This allows the Agent-side logic to detect keywords like 'context length exceeded' 
+        # This allows the Agent-side logic to detect keywords like 'context length exceeded'
         # or 'content violation' and raise appropriate exceptions.
         error_text = e.response.text if e.response else "No error details"
         status_code = e.response.status_code if e.response else 502

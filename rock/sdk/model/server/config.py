@@ -30,7 +30,8 @@ SESSION_END_MARKER = "SESSION_END"
 class ModelServiceConfig(BaseModel):
     proxy_rules: dict[str, str] = Field(
         default_factory=lambda: {
-            "gpt": "https://api.openai.com/v1/chat/completions",
+            "gpt-3.5-turbo": "https://api.openai.com",
+            "default": "https://api-inference.modelscope.cn"
         }
     )
 
