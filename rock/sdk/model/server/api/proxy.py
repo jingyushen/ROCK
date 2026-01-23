@@ -66,7 +66,7 @@ async def chat_completions(body: dict[str, Any], request: Request):
     # Step 1: Model Routing
     model_name = body.get("model", "")
     base_url = get_base_url(model_name, config)
-    target_url = f"{base_url}/v1/chat/completions"
+    target_url = f"{base_url}/chat/completions"
     logger.info(f"Routing model '{model_name}' to URL: {target_url}")
 
     # Step 2: Header Cleaning

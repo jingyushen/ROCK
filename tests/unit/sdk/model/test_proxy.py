@@ -59,7 +59,7 @@ async def test_chat_completions_fallback_to_default_when_not_found():
 
         config = test_app.state.model_service_config
         default_base_url = config.proxy_rules["default"].rstrip("/")
-        expected_target_url = f"{default_base_url}/v1/chat/completions"
+        expected_target_url = f"{default_base_url}/chat/completions"
 
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
